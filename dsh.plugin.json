@@ -6,6 +6,7 @@
   "engines": { "dsh": ">=0.1.5-rc.1 <0.1.6-0 || >=0.1.6-alpha.1 <0.1.7-0 || >=0.1.7-alpha.1 <0.2.0-0 || >=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.3.0-0" },
   "contributes": {
     "tools": [
+      "qq_send_text",
       "qq_send_image",
       "qq_send_voice",
       "qq_send_video",

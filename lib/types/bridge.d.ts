@@ -325,6 +325,16 @@ export declare class ChatBridge {
      */
     sendToChat(chatId: ChatId, text: string, options?: SendOptions): Promise<string[]>;
     /**
+     * Send plain text as a proactive write (the `qq_send_text` tool). Same body
+     * pipeline as {@link sendToChat}, but gated + audited as a proactive write
+     * (W2-③), matching `sendSegments` / `sendForward`.
+     * @param chatId - target chat.
+     * @param text - text to send.
+     * @param options - optional reply target.
+     * @returns the sent message ids.
+     */
+    sendProactiveText(chatId: ChatId, text: string, options?: SendOptions): Promise<string[]>;
+    /**
      * Send raw OneBot segments (used by the media tools).
      * @param chatId - target chat.
      * @param segments - outbound segments.

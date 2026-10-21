@@ -1,0 +1,126 @@
+name: Sync upstream
+
+# Auto-absorb upstream (mario841859784/dsh-onebot) updates into this fork.
+#
+# Design notes:
+# - Runs on a schedule (every 6h) and on demand. Upstream pushes often, so a
+#   frequent cadence keeps the fork close to HEAD without human action.
+# - A clean merge is followed by a rebuild of lib/ (upstream commits its build
+#   output, so the fork must too) and a push to main.
+# - A CONFLICTING merge is NOT auto-resolved: silently taking one side would
+#   drop either the fork's qq_send_text feature or an upstream fix. Instead the
+#   job fails loudly and leaves the repo untouched, so the conflict can be
+#   resolved by hand with full context.
+# - The build step re-installs the host @deepseek-ai/* packages because the
+#   plugin compiles against them; they are not vendored in this repo.
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+  # Also try right after a push to main, so a manual fix gets an immediate
+  # chance to pick up anything upstream landed meanwhile.
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM_REPO: mario841859784/dsh-onebot
+      UPSTREAM_BRANCH: main
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream "${UPSTREAM_BRANCH}"
+
+      - name: Detect whether anything is new upstream
+        id: check
+        run: |
+          if git merge-base --is-ancestor "upstream/${UPSTREAM_BRANCH}" HEAD; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "Upstream is already contained in this fork — nothing to do."
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+            echo "Upstream has commits this fork does not have:"
+            git log --oneline "HEAD..upstream/${UPSTREAM_BRANCH}" | head -30
+          fi
+
+      - name: Merge upstream (fail on conflict)
+        if: steps.check.outputs.new == 'true'
+        id: merge
+        run: |
+          # No --no-edit + no auto-resolution: a conflict must surface, not be
+          # guessed at.
+          if git merge --no-edit "upstream/${UPSTREAM_BRANCH}"; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort || true
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Upstream merge conflict"
+              echo ""
+              echo "The fork could not fast-forward/merge `${UPSTREAM_REPO}@${UPSTREAM_BRANCH}` cleanly."
+              echo "Nothing was pushed. Resolve locally:"
+              echo ""
+              echo '```sh'
+              echo "git fetch upstream && git merge upstream/${UPSTREAM_BRANCH}"
+              echo "# resolve conflicts, then: npm ci && npm run build && git add -A && git commit"
+              echo '```'
+              echo ""
+              echo "Conflicting paths:"
+              git diff --name-only --diff-filter=U || true
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Install host packages needed to compile
+        if: steps.merge.outputs.merged == 'true'
+        run: |
+          npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Rebuild lib/ (upstream commits build output)
+        if: steps.merge.outputs.merged == 'true'
+        run: |
+          # tsc emits even with pre-existing type errors in upstream sources
+          # (noEmitOnError is unset); the build gate is "did lib/ change".
+          npx tsc -p tsconfig.json || true
+          if git diff --quiet -- lib; then
+            echo "lib/ unchanged after rebuild — upstream already committed a matching build."
+          else
+            git add lib
+            git commit -m "chore(build): rebuild lib/ after upstream sync"
+          fi
+
+      - name: Verify the fork's own feature survived the merge
+        if: steps.merge.outputs.merged == 'true'
+        run: |
+          # The whole point of the fork is qq_send_text; a merge that dropped it
+          # must not be pushed.
+          grep -q "qq_send_text" src/tools.ts
+          grep -q "qq_send_text" lib/tools.js
+          grep -q "sendProactiveText" src/outbound.ts
+          echo "fork feature intact"
+
+      - name: Push
+        if: steps.merge.outputs.merged == 'true'
+        run: git push origin HEAD:main

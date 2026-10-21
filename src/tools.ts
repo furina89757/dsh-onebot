@@ -106,6 +106,33 @@ export function registerTools(
   }
 
   register(defineTool({
+    name: 'qq_send_text',
+    description: '主动向 QQ 会话发送一条纯文本消息（不需要对方先说话）。长文本自动分段，Markdown 会被转成 QQ 纯文本。',
+    parameters: {
+      text: { type: 'string', required: true, description: '要发送的文本内容' },
+      chat_id: { type: 'string', description: '目标会话，格式 private:<QQ号> 或 group:<群号>；省略时默认当前会话' },
+      reply_to: { type: 'string', description: '可选：引用（回复）这条消息的 message_id' },
+    },
+    output: {
+      schema: { type: 'json' as const },
+      render: (_args: unknown, value: unknown) => {
+        const v = value as { messageIds?: string[] }
+        const ids = Array.isArray(v.messageIds) ? v.messageIds : []
+        return [{ type: 'text' as const, text: ids.length > 0 ? '已发送（' + ids.length + ' 段）' : '已发送' }]
+      },
+    },
+    isConcurrencySafe: () => true,
+    execute: async (args, exec) => {
+      const a = args as { text?: unknown; chat_id?: unknown; reply_to?: unknown }
+      if (typeof a.text !== 'string' || a.text.trim() === '') throw new Error('qq_send_text: text 必填且不能为空')
+      const chatId = resolveChat(bridge, exec, a.chat_id)
+      const options = typeof a.reply_to === 'string' && a.reply_to !== '' ? { replyTo: a.reply_to } : {}
+      const messageIds = await bridge.sendProactiveText(chatId, a.text, options)
+      return { sent: true, messageIds }
+    },
+  }))
+
+  register(defineTool({
     name: 'qq_send_image',
     description: '向 QQ 会话发送一张或多张图片（本地文件路径或 http(s) URL，最多 9 张）。用于回复用户时附带截图/生成图等。',
     parameters: {

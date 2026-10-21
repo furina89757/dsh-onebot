@@ -196,6 +196,37 @@ export class OutboundPipeline {
     })
   }
 
+  /**
+   * Send plain text as a PROACTIVE write (the `qq_send_text` tool): same body
+   * pipeline as {@link sendToChat} (forward blocks, Markdown strip, t2i card,
+   * sentence splitting) but counted against the W2-③ minute/day caps and
+   * audited, exactly like `sendSegments` / `sendForward`.
+   *
+   * The gate is evaluated synchronously BEFORE joining the per-chat send
+   * chain, so a rejected write never queues behind in-flight sends and the
+   * bridge-wide counters stay correct under concurrency. A turn's passive
+   * replies keep using {@link sendToChat} and never touch the gate.
+   * @param chatId - target chat.
+   * @param text - text to send.
+   * @param options - optional reply target.
+   * @returns the sent message ids.
+   */
+  sendProactiveText(chatId: ChatId, text: string, options: SendOptions = {}): Promise<string[]> {
+    const reject = this.writeGateRejectReason(chatId, 'send_text')
+    if (reject !== null) return Promise.reject(new OneBotActionError(reject))
+    return this.sendToChat(chatId, text, options).then(
+      ids => {
+        this.auditWrite(chatId, 'send_text', true, '发送成功')
+        return ids
+      },
+      (error: unknown) => {
+        this.auditWrite(chatId, 'send_text', false, '发送失败: ' + describeError(error))
+        this.ctx.trace?.(chatId, { stage: 'outbound', ok: false, reason: '主动写发送失败: ' + describeError(error) })
+        throw error
+      },
+    )
+  }
+
   /** Park one queuable send for a chat while disconnected (M1-B6):
    * per-chat FIFO, capped — the oldest entry is dropped beyond the cap. */
   private queuePendingSend(chatId: ChatId, text: string): void {
