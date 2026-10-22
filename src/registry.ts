@@ -196,7 +196,7 @@ export interface RegistryDeps {
   agentPresets: AgentPresetsLike | undefined
   defaultModel: (() => ModelSelection | undefined) | undefined
   /** The only config fields the registry reads. */
-  config: Pick<BridgeConfig, 'mediaDir' | 'workspacePath' | 'agentPreset' | 'restrictedMemberPrefix' | 'maxImageBytes' | 'maxVoiceBytes' | 'maxFileBytes' | 'chatIdleEvictDays'>
+  config: Pick<BridgeConfig, 'mediaDir' | 'workspacePath' | 'agentPreset' | 'restrictedMemberPrefix' | 'maxImageBytes' | 'maxVoiceBytes' | 'maxFileBytes' | 'chatIdleEvictDays' | 'provider' | 'model' | 'reasoningEffort'>
   log(level: 'info' | 'warn' | 'error' | 'debug', message: string): void
   /** Bridge stop flag (guards the resume loop). */
   isStopping(): boolean
@@ -257,7 +257,22 @@ export class ChatRegistry {
    * — agent options for the registry call plus the mutable per-agent
    * selection ref (undefined when the deployment has no default model). */
   private modelWiring(): { agentOptions: { provider?: string; model?: string }; selectionRef: ModelSelectionRef | undefined } {
-    const selection = this.deps.defaultModel?.()
+    // Channel-level override wins over the deployment default: a QQ bot may run
+    // a different model/effort than the desktop sessions. Both provider and
+    // model must be configured for the override to apply (a half-configured
+    // pair would route to the wrong provider).
+    const cfg = this.deps.config
+    const channelSelection: ModelSelection | undefined =
+      cfg.provider !== undefined && cfg.provider !== '' && cfg.model !== undefined && cfg.model !== ''
+        ? {
+            provider: cfg.provider,
+            model: cfg.model,
+            ...(cfg.reasoningEffort !== undefined && cfg.reasoningEffort !== ''
+              ? { reasoningEffort: cfg.reasoningEffort as ModelSelection['reasoningEffort'] }
+              : {}),
+          }
+        : undefined
+    const selection = channelSelection ?? this.deps.defaultModel?.()
     const agentOptions: { provider?: string; model?: string } = {}
     if (selection !== undefined) {
       agentOptions.provider = selection.provider

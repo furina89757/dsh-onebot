@@ -473,7 +473,12 @@ async function handleModelCommand(ctx: CommandContext, chatId: ChatId, arg: stri
   } catch (error) {
     ctx.log('debug', 'model switch precheck failed for ' + provider + ': ' + String(error))
   }
-  const next = { provider, model }
+  // Preserve the current reasoning effort across a bare model switch: a
+  // switch that dropped it would silently reset the chat to the provider
+  // default (the channel-level effort from config only seeds NEW sessions).
+  const currentSelection = chat?.selectionRef?.current
+  const next: { provider: string; model: string; reasoningEffort?: ModelSelection['reasoningEffort'] } = { provider, model }
+  if (currentSelection?.reasoningEffort !== undefined) next.reasoningEffort = currentSelection.reasoningEffort
   if (toDefault) {
     // Explicit --default: rewrite the deployment-wide default only (M2-C5a).
     if (ctx.agentDefaultModel !== undefined) {

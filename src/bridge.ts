@@ -88,6 +88,12 @@ export interface BridgeConfig {
   fontFamilies: readonly string[]
   agentPreset: string
   workspacePath: string
+  /** QQ-channel model override: empty provider/model falls back to the DSH
+   * global default (agent-default-model). Both must be set to take effect. */
+  provider?: string
+  model?: string
+  /** QQ-channel reasoning effort override; empty = provider default. */
+  reasoningEffort?: string
   /** Max inbound file bytes fetched via QQ direct link / base64 (0 = no cap). */
   maxInboundFileBytes: number
   /** B8c: chats idle longer than this many days are evicted on the next

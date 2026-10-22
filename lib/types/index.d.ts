@@ -154,6 +154,12 @@ export interface Config {
     fontFamilies: string[];
     agentPreset: string;
     workspacePath: string;
+    /** QQ-channel model override (empty = DSH global default). */
+    provider: string;
+    /** QQ-channel model id override (empty = DSH global default). */
+    model: string;
+    /** QQ-channel reasoning effort override (empty = provider default). */
+    reasoningEffort: string;
     inboundFileMaxBytes: number;
     /** @deprecated D4a alias of inboundFileMaxBytes; honored for one release. */
     maxInboundFileBytes?: number;

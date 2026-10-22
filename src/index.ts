@@ -152,6 +152,12 @@ export interface Config {
   fontFamilies: string[]
   agentPreset: string
   workspacePath: string
+  /** QQ-channel model override (empty = DSH global default). */
+  provider: string
+  /** QQ-channel model id override (empty = DSH global default). */
+  model: string
+  /** QQ-channel reasoning effort override (empty = provider default). */
+  reasoningEffort: string
   inboundFileMaxBytes: number
   /** @deprecated D4a alias of inboundFileMaxBytes; honored for one release. */
   maxInboundFileBytes?: number
@@ -300,6 +306,12 @@ export const Config: Z<Config> = z.object({
     .description('QQ 会话加入的 agent 预设 id；留空用部署默认（settings 的 agent-presets.default，当前为 router-flash）。创建时总是解析有效预设并写入会话 header，Web 界面可见；resume 优先恢复会话自己记录的预设'),
   workspacePath: z.string().default('')
     .description('QQ 会话的工作区目录（写入会话 cwd，并自动归入该工作区，不存在则创建）；留空时使用宿主进程工作目录并在启动时告警提醒（宿主未提供可编程查询的默认工作区），单聊 /workspace 覆盖优先且已持久化到会话映射文件，重启/恢复失败均不丢失'),
+  provider: z.string().default('')
+    .description('QQ 会话使用的 provider 路由（如 workbuddy / deepseek-official）；留空 = 使用 DSH 全局默认模型（agent-default-model）。QQ 通道可与桌面端用不同模型'),
+  model: z.string().default('')
+    .description('QQ 会话使用的模型 id（如 deepseek-v4.1-flash）；留空 = 使用 DSH 全局默认。provider 与 model 必须同时配置才生效'),
+  reasoningEffort: z.string().default('')
+    .description('QQ 会话的思考强度（off/low/medium/high/max，取决于 provider 支持）；留空 = 使用 provider 默认。仅在 provider+model 同时配置时生效'),
   inboundFileMaxBytes: z.number().default(INBOUND_FILE_MAX_BYTES)
     .description('QQ 入站文件最大字节数（直链/base64 拉取，0 = 不限制）'),
   maxInboundFileBytes: z.number().deprecated()
@@ -529,6 +541,9 @@ export function apply(ctx: Context, config: Config): void {
       fontFamilies: config.fontFamilies,
       agentPreset: config.agentPreset,
       workspacePath: config.workspacePath,
+      provider: config.provider,
+      model: config.model,
+      reasoningEffort: config.reasoningEffort,
       maxInboundFileBytes: config.inboundFileMaxBytes,
       chatIdleEvictDays: config.chatIdleEvictDays,
       ...gateConfig,
