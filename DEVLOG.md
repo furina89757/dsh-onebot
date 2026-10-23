@@ -853,3 +853,10 @@ docker restart 会丢登录态（需重新扫码/QCE 登录）
 - **验证**：全量 vitest 全绿（38 文件 / 534 用例）；首轮 tests/inject.spec.ts「dry-run=false lets injected rounds really send」并行负载下偶发失败（既有环境 flake，0.9.0 已记录口径），隔离单跑 11/11 绿后全量复跑 38 文件 / 534 用例全过。
 - **清单同步**：package.json version 0.9.3→0.9.4；dsh.plugin.json 同步 0.9.4；tests/commands.spec.ts packageVersion 断言随版更新为 0.9.4（it 描述串 + expect 两行，仿 0.9.3 发版先例）；lib 产物零改动（本发版不改 src，`/ver` 的 packageVersion() 动态读 package.json，client.js 本次未再改）；package-lock.json 沿用既有惯例不动。
 - **边界**：commit → tag v0.9.4 → push → npm publish 随本发版同批完成。
+
+## 2026-10-24 发版 0.9.5（设置页可视化重设计三批实施，T8）
+
+- **改动**：设置页可视化重设计三批实施随本发版出版本号，本发版零代码改动：token 视觉基线 + 暗色适配 + 交互逻辑（脏状态/确认/折叠/mode 联动/重试）+ 冲突合并保留 + 数字行内校验。实现见 feat commit aebbe7f（代码 956+/52−，已部署真机）与设计文档 commit 0f787af（三份设计文档），均已入库。
+- **验证**：npx tsc --noEmit 零错误；全量 vitest 全绿（38 文件 / 550 用例）；部署目录 /vol2/@appshare/Harness/dsh-plugins/dsh-onebot 已同步版本号（lib 代码已在真机，未动其他文件）。
+- **清单同步**：package.json version 0.9.4→0.9.5；dsh.plugin.json 同步 0.9.5；tests/commands.spec.ts packageVersion 断言随版更新为 0.9.5（it 描述串 + expect 两行，仿 0.9.3/0.9.4 发版先例）；lib 产物零改动（本发版不改 src，`/ver` 的 packageVersion() 动态读 package.json）；package-lock.json 沿用既有惯例不动。
+- **边界**：commit → tag v0.9.5 → push → npm publish 随本发版同批完成。
