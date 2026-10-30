@@ -157,7 +157,7 @@ WS 连接、图片下载、文件解析都依赖这条网络通路；NapCat 与 
 | `accessToken` | 空 | OneBot token；**reverse 模式必填**，留空插件拒绝启动（fail-closed）；forward 可为空 |
 | `botQQ` | 空 | 机器人 QQ（空=自动学习） |
 | `ignoreSelf` | `true` | 忽略机器人自己发出的消息（防自循环） |
-| `requireMention` | `true` | 群聊需 @ 或回复机器人的消息才响应（回复他人消息不触发；被回复消息无法判定时回落视为提及，fail-open） |
+| `requireMention` | `true` | 群聊需 @ 或回复机器人的消息才响应；仅靠引用触发时通过 `get_msg.sender.user_id` 确认原作者，回复他人、作者未知或查询失败均不触发（fail-closed）。显式 @机器人不受引用查询结果影响 |
 | `rateLimitPerMinute` | `30` | 每会话每分钟普通消息上限（60s 滑动窗口）：超限跳过处理并限流提示（每窗口至多一条），命令不受限；`0` = 禁用 |
 | `dedupWindowSeconds` | `300` | 入站消息去重窗口（秒，W2-②）：同一会话内相同 message_id 在该窗口内重投（断线重连重放等）只处理第一条，后续静默跳过并记 debug；仅对会触发回复处理的消息事件生效（notice/meta 类不经过此闸）；`0` = 禁用去重 |
 | `actionRatePerMinute` | `20` | 主动写操作每分钟全桥合计上限（W2-③）：约束 qq_send_image/voice/video/file/segments 与 qq_send_forward 等工具发起的主动发送（回合内的被动回复/interim/通知不受此闸，由 rateLimitPerMinute 与离线队列上限约束）；超限拒发并记 warn 与审计；`0` = 禁用分钟限额 |
@@ -208,6 +208,12 @@ WS 连接、图片下载、文件解析都依赖这条网络通路；NapCat 与 
 > ⚠️ **BREAKING（M0 安全加固）**：reverse 模式下 `accessToken` 留空会拒绝启动（fail-closed）；`host` 默认从 `0.0.0.0` 改为 `127.0.0.1`（仅本机监听），跨机部署需显式配置 `host: 0.0.0.0`。
 
 环境变量：`ONEBOT_ALLOWED_USERS`（逗号分隔管理员）、`ONEBOT_ALLOW_ALL_USERS=true`（开发用）。
+
+### 引用唤醒的查询成本与诊断
+
+开启 `requireMention` 时，通过群策略与去重检查、机器人身份已知且没有显式 @ 的有效引用消息，每条都会发起一次 `get_msg` 来确认原作者，群友之间互相引用也一样。校验通过后，引用展开复用该响应，不再重复查询。查询发生在入站消息限流之前，因此 `rateLimitPerMinute` 不限制这些查询；当前不使用跨消息缓存，如高流量群出现瓶颈再考虑缓存优化。
+
+引用 ID 只接受可精确表示的十进制整数（支持负数），无效 ID 不发起查询。开启 trace 后，`mention` 阶段会区分无效 ID、查询失败或空响应、作者缺失、作者非机器人与普通未提及，便于排查拒绝原因。显式 @、私聊及关闭提及门控时，无效引用仅跳过展开，不阻断当前消息。
 
 ## 录制 · 回放 · 注入 · 体检（W1）
 
@@ -398,7 +404,7 @@ chat 回退到下一条消息新建会话，不会卡死。损坏（碰撞/恢�
 
 | 症状 | 原因与处理 |
 |---|---|
-| 群聊不响应 | `requireMention: true` 时需 @ 或回复机器人的消息才触发；@ 检测 fail-closed——确认 botQQ 已从 meta 事件学习，或显式配置 |
+| 群聊不响应 | `requireMention: true` 时需 @ 或回复机器人的消息才触发；确认 botQQ 已从事件学习或显式配置。仅靠引用触发还需 `get_msg` 能确认原作者是机器人；原消息不存在或查询失败时，可显式 @机器人 |
 | 图片下载 403 | NapCat 会把 URL 中的 `&` 转成 `&amp;`（解析已自动反转义）；仍失败可查日志中 media 下载行 |
 | 文件接收失败 | 非本机部署 NapCat 时需开启「文件转 URL」开关，否则 get_file 返回容器内路径不可达；确认 dsh 与 NapCat 网络互通 |
 | 文字图中文豆腐块 | Linux 未装 CJK 字体：`apt install fonts-noto-cjk`，并用 `fontFiles` 指定 SC 字体文件 |
